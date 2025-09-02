@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SNS — Integrated Meditation Tracker (Face + Mic + Feedback)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+ 
+    <link rel="stylesheet" type="text/css" href="index.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.5"></script>
+
+  <style>
+.mt-7{
+  width: 1250px;
+   height: 1400px;
+   margin-top: 90px;
+  padding: 60px 20px 20px;
+  border-radius: 0px;
+  color: rgb(255, 255, 255);
+  font-family: 'Arial', sans-serif;
+  text-align: left;
+  background: linear-gradient(270deg, #ba8aa7, #08080a, #2a352f, #493a43);
+  background-size: 600% 600%;
+  box-shadow: 0 10px 25px rgba(255, 255, 255, 0.2);
+  transition: transform 0s ease, box-shadow 0 ease;
+  
+  
+}
+.mt-2 {
+  margin-bottom: 8px;   /* size control */
+  padding: 7px ;   /* thoda space andar ka */
+  font-size: 1.2rem;    /* text size */
+  font-weight: bold;    /* mota text */
+  color: rgba(0, 0, 0, 0.o);         /* text ka rang */
+
+  /* Advanced Gradient Background */
+  background: linear-gradient(135deg, #1f1519, #2e3335, #1a1f27);
+  background-size: 300% 300%;
+  border-radius: 12px;
+
+  /* Shadow for depth */
+  box-shadow: 0 4px 15px rgba(203, 239, 239, 0.3);
+
+  /* Animation */
+  
+}
+
+
+    :root{
+      --bg1: #0f0c29;
+      --bg2: #472836;
+      --glass: rgba(255,255,255,0.04);
+      --accent1: #edbe00;
+      --accent2: #bf06c5;
+      --muted: rgba(130, 120, 49, 0.08);
+      --card-shadow: 0 6px 30px rgba(116, 88, 43, 0.45);
+      --glass-border: rgba(8, 63, 244, 0.06);
+      --text: #e9f0ff;
+    }
+
+    html,body{
+      height:108%;
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background:
+        radial-gradient(300px 500px at 10% 20%, rgba(208, 231, 92, 0.1), transparent 18%),
+        radial-gradient(700px 600px at 90% 80%, rgba(0, 0, 0, 0.06), transparent 15%),
+        linear-gradient(135deg,var(--bg1),var(--bg2));
+      color:var(--text);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    .container{
+      max-width:1200px;
+      margin:30px auto;
+      padding:20px;
+      max-height: 850px;
+    }
+
+    .topbar{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      margin-top:14px;
+    }
+
+    h1{
+      font-size:32px;
+      font-weight:800;
+      margin:40px;
+      letter-spacing:0.2px;
+    }
+    .subtitle{ font-size:13px; color: #dbe7ff; opacity:.9; }
+
+    .card{
+      background: linear-gradient(90deg, rgba(200, 0, 0, 0.08), rgba(0, 0, 0, 0.09));
+      
+    }
+
+    .controls { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .controls select, .controls button { background: #947794; color:var(--text); border: 1px solid rgba(239, 15, 15, 0.06); padding:8px 10px; border-radius:10px; }
+
+    .trio{
+      display:grid;
+      grid-template-columns: 400px 380px 440px;
+      grid-template-rows: 180px 180px 180px;
+      gap:16px;
+      align-items:flex;
+      margin-top:12px;
+    }
+    @media (max-width:900px){
+      .trio{ grid-template-columns: 1fr; }
+    }
+
+    #faceWrap{ position:relative; width:100%; max-width:420px; height:300px; margin:0 auto; }
+    video.input_video{ width:100%; height:100%; object-fit:cover; border-radius:12px; display:block; }
+    canvas.output_canvas{ position:absolute; inset:0; border-radius:12px; pointer-events:none; }
+
+    #waveCanvas{ width:100%; border-radius:12px; background: linear-gradient(180deg, rgba(4, 2, 2, 0.06), rgba(9, 2, 2, 0.02)); display:a; }
+
+    .circle{
+      width:120px; height:120px; border-radius:50%;
+      display:grid; place-items:center; margin:60px auto ;
+      background: radial-gradient(40% 40% at 30% 30%, #b596b0 4%, #f1eef1 10%, #efebeb 10%, #106a86 90%);
+      box-shadow: inset 0 -18px 34px rgba(0,0,0,.60), inset 0 8px 18px rgba(255,255,255,.12), 0 10px 30px rgba(251, 251, 251, 0.18);
+      transform: scale(1);
+      transition: transform 200ms cubic-bezier(.2,.9,.2,1);
+    }
+    .circle img.logo{ width:80%; height:80%; object-fit:contain; border-radius:80%; }
+
+    label{ display:block; font-size:13px; margin-bottom:6px; color:#dfe8ff; }
+    .help{ font-size:13px; color:#dfe8ff; opacity:.85; }
+
+    .meter{ height:14px; background: rgba(255,255,255,0.06); border-radius:999px; overflow:hidden; }
+    .meter > span{ display:block; height:100%; background: linear-gradient(90deg,var(--accent1),var(--accent2)); width:0%; }
+
+    /* feedback sliders */
+    input[type="range"]{ width:100%; accent-color: var(--accent2); }
+
+    /* session history table */
+    .history-table{ width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+    .history-table th, .history-table td{ padding:8px 10px; border-bottom:1px solid rgba(255, 255, 255, 0.03); text-align:left; color:#e9f0ff; }
+
+    /* utility */
+    .flex { display:flex; } .items-center{ align-items:center; } .gap-2{ gap:8px; } .mt-2{ margin-top:8px; } .mb-2{ margin-bottom:8px; } .text-muted{ color:#cdd9ff; opacity:.8; font-size:13px; }
+
+
+  </style>
+</head>
+<body>
+  <div class="video-bg-wrap">
+    </div>
+    
+<div class="video-bg">
+  <video autoplay muted loop playsinline id="bgVideo">
+    <source src="broken stone.mp4" type="video/mp4">
+  </video>
+  <!-- Overlay Text (sabse upar) -->
+    <div class="absolute top-5  text-white text-6xl md:text-2.8xl font-bold mix-blend-screen drop-shadow-lg text-center w-full color-white">
+       SCIENCE AND SPIRITUALITY CLUB
+    </div>
+  </div>
+</div>
+<body class="bg-black">
+  <div class="radial-gradient w-full h-screen overflow-hidden relative flex items-center justify-center">
+    
+    <!-- Background Video -->
+    <video autoplay muted loop playsinline class="absolute w-full h-full object-cover z-0">
+      <source src="broken stone.mp4" type="video/mp4">
+    </video>
+
+    <!-- Overlay Row of 3 Videos -->
+    <div class="absolute top-0 left-0 w-full h-full flex z-10">
+      
+      <!-- Krishna Video -->
+      <div class="w-1/3 h-full p-1 relative group">
+        <video autoplay muted loop playsinline class="video-frame w-full h-full object-cover">
+          <source src="krishna.mp4" type="video/mp4">
+        </video>
+        <!-- Caption -->
+        <div class="absolute top-5 left-1/2 transform -translate-x-1/2 text-white text-.8xl font-bold opacity-100  bg-black/20 px-3 py-1 rounded-lg">
+         Performance by Our SNS <span class="bg-orange-200 text-black px-1 rounded">Family</span>
+        </div>
+      </div>
+
+      <!-- Director Video -->
+      <div class="w-1/3 h-full p-1 relative group">
+        <video autoplay muted loop playsinline class="video-frame w-full h-full object-cover">
+          <source src="director.mp4" type="video/mp4">
+        </video>
+        <!-- Caption -->
+        <div class="absolute top-5 left-1/2 transform -translate-x-1/2 text-white text-.6xl font-bold opacity-100 bg-black/40 px-3 py-1 rounded-lg text-center max-w-2xl">
+    NITC Foundation Day 2024: <span class="bg-orange-200 text-black px-1 rounded">Director</span> and <span class="bg-orange-200 text-black px-1 rounded">Students </span>Explore SNS Stall.
+</div>
+
+      </div>
+
+      <!-- Sri Video -->
+      <div class="w-1/3 h-full p-1 relative group">
+        <video autoplay muted loop playsinline class="video-frame w-full h-full object-cover">
+          <source src="sri.mp4" type="video/mp4">
+        </video>
+        <!-- Caption -->
+        <div class="absolute top-5 left-1/2 transform -translate-x-1/2 text-white text-.5xl font-bold opacity-100 bg-black/20 px-4 py-2 rounded-lg text-center max-w-2xl leading-snug whitespace-normal">
+          Inspiring Moments of Teamwork and Guidance with Respected <span class="bg-yellow-200 text-black px-1 rounded">Sir R.Sridharan </span>– SNS Members.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Glow Border CSS -->
+  <style>
+  .video-frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+    border: 4px solid transparent;
+    animation: borderGlow 1000000000s linear;
+  }
+
+  @keyframes borderGlow {
+    0%   { border-color: #63334b; box-shadow: 0 0 15px #ff4da6; }
+    25%  { border-color: #3b4e62; box-shadow: 0 0 15px #4da6ff; }
+    50%  { border-color: #34473a; box-shadow: 0 0 15px #4dff88; }
+    75%  { border-color: #a65d13; box-shadow: 0 0 15px #ffa64d; }
+    100% { border-color: #723855; box-shadow: 0 0 15px #ff4da6; }
+  }
+
+  /* Text color cycling */
+  @keyframes colorCycle {
+    0%   { color: #225e5c; }
+    25%  { color: #ffa64d; }
+    50%  { color: #4dff88; }
+    75%  { color: #4da6ff; }
+    100% { color: #ff4dff; }
+  }
+  .color-animate {
+    animation: colorCycle 0 infinite linear;
+  }
+  </style>
+</body>
+
+
+
+
+
+
+
+  </div>
+<hr class="section-breaks">
+  <hr class="section-breaks1">
+  <hr class="section-breaks2">
+  <hr class="section-breaks3">
+  
+<div class="container">
+    <div class="topbar">
+      <div>
+        <h1>Breath Meditation — Mic + Face Reactive (SNS)</h1>
+        <div class="subtitle">Integrated fce calmness, waveform visualizer, feedback and session</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="exportCsv" class="card">Export Sessions (CSV)</button>
+        <button id="clearHistory" class="card">Clear History</button>
+      </div>
+    </div>
+    <div class="cursor-glow"></div>
+
+
+    <!-- Main controls -->
+    <div class="card">
+      <div class="controls">
+        <div style="min-width:220px;">
+          <label for="micSelect">🎤 Select Microphone</label>
+          <select id="micSelect"></select>
+        </div>
+
+        <div>
+          <label for="breathCount">Breaths</label>
+          <select id="breathCount">
+            <option value="3">3</option><option value="5" selected>5</option><option value="7">7</option><option value="10">10</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="voiceSelect">Voice</label>
+          <select id="voiceSelect"><option>Auto (Indian female)</option></select>
+        </div>
+
+        <div>
+          <label>&nbsp;</label>
+          <div class="flex gap-2">
+            <button id="allowMicBtn" class="card">Allow Mic</button>
+            <button id="allowCam" class="card">Allow Cam</button>
+            <button id="startBtn" class="card" style="background:linear-gradient(90deg,var(--accent1),var(--accent2));">▶️ Start</button>
+            <button id="stopBtn" class="card">⏹ Stop</button>
+          </div>
+        </div>
+
+        <div style="margin-left:auto;">
+          <label>&nbsp;</label>
+          <div class="text-muted">Session status: <span id="sessionStatus">idle</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="trio">
+  
+      <div class="card">
+        <h2 class="mb-2">👁️ Facial Meditation Tracking</h2>
+        <p class="help">Close your eyes softly; keep head still; relax gaze.</p>
+        <div id="faceWrap" class="mt-2">
+          <video class="input_video" autoplay playsinline muted></video>
+          <canvas class="output_canvas"></canvas>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4 mt-3 text-sm">
+          <div>
+            <div><strong>Eye Relaxation:</strong> <span id="eyeScoreTxt">0%</span></div>
+            <div class="meter mt-1"><span id="eyeBar" style="width:0%"></span></div>
+          </div>
+          <div>
+            <div><strong>Head Steadiness:</strong> <span id="headScoreTxt">0%</span></div>
+            <div class="meter mt-1"><span id="headBar" style="width:0%"></span></div>
+          </div>
+          <div>
+            <div><strong>Gaze Stability:</strong> <span id="gazeScoreTxt">0%</span></div>
+            <div class="meter mt-1"><span id="gazeBar" style="width:0%"></span></div>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <label class="text-muted">Debug / Info</label>
+          <div class="text-muted">
+            <div>FPS: <span id="fps">-</span> · Faces detected: <span id="facesDetected">0</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Waveform card -->
+      <div class="card">
+        <label class="font-semibold">Live Waveform</label>
+        <canvas id="waveCanvas" width="400" height="150" class="mt-2"></canvas>
+
+        <div class="mt-3 grid grid-cols-2 gap-4">
+          <div>
+            <div><strong>Breath Consistency</strong> <span id="breathConsTxt">—</span></div>
+            <div class="meter mt-1"><span id="breathConsBar" style="width:0%"></span></div>
+          </div>
+          <div>
+            <div><strong>Mic Level</strong> <span id="micLvl">—</span></div>
+            <div class="meter mt-1"><span id="micLvlBar" style="width:0%"></span></div>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <label class="text-muted">Visualizer Settings</label>
+          <div class="flex gap-2 mt-1">
+            <button id="muteBtn" class="card">🔈 Mute</button>
+            <button id="refreshMics" class="card">🔄 Refresh Mics</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Breathing circle -->
+      <div class="card">
+        <div class="flex flex-col items-left">
+          <div id="breathingCircle" class="circle">
+            <img src="snslogo.png" alt="logo" class="logo" onerror="this.style.display='none'">
+          </div>
+          <div id="breathStatus" class="help mt-100">Ready — press Start</div>
+
+          <div class="mt-4 w-full">
+            <label class="text-muted">Session Progress</label>
+            <div class="meter mt-1"><span id="sessionMeter" style="width:0%"></span></div>
+            
+          </div>
+          
+
+         
+          
+          
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback & Chart -->
+    <div class="card mt-7">
+      <h2> Post-Session Feedback</h2>
+      <p class="help"> 👉 Slide to choose and submit your final score (range: 1–1000).</p>
+
+      <form id="feedbackForm" class="sliders mt-3 grid gap-3">
+        <div><label>Mood &amp;Stress Relief – Did you feel less stressed after completing the breathing game?</label><input type="range" name="q1" min="1" max="1000" value="500" /></div>
+        <div><label>Stress &amp;Mood Shift – How did your mood change before and after playing the game?</label><input type="range" name="q2" min="1" max="1000" value="500" /></div>
+        <div><label>Attention, Focus &amp;Breath Awareness – Did the game help you pay more attention to your breathing?</label><input type="range" name="q3" min="1" max="1000" value="500" /></div>
+        <div><label>Social Connection, Kindness &amp; Mindfulness – Did you feel more mindful or present after playing the game?</label><input type="range" name="q4" min="1" max="1000" value="500" /></div>
+        <div><label>Engagement/Enjoyment &amp; – Did you enjoy the game and would you like to play it again?</label><input type="range" name="q5" min="1" max="1000" value="500" /></div>
+        <div><label>Helped you understand your thoughts &amp; feelings?</label><input type="range" name="q6" min="1" max="1000" value="500" /></div>
+
+        <div class="flex gap-2 mt-2">
+          <button type="submit" class="card" style="background:linear-gradient(120deg,var(--accent1),var(--accent2));">Submit Feedback</button>
+          <button type="button" id="resetBtn" class="card">Reset</button>
+        </div>
+      </form>
+
+      <div class="mt-6 flex gap-4 items-start">
+        <div style="flex:1; min-width:600px;">
+          <canvas id="resultChart" width="800"height="800" style="display:block;box-sizing: border-box;height: 700px; width: 700px;"></canvas>
+        </div>
+        <div style="width:260px;">
+          <div id="resultSummary" class="help"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Final Result -->
+    <div class="card mt-6">
+      <h2> Final Session Result</h2>
+      <p class="help">Computed from facial tracking + mic waveform + your feedback.</p>
+
+      <div class="grid md:grid-cols-2 gap-4 mt-3 text-sm">
+        <div class="space-y-1">
+          <div><strong>Face Calmness</strong> (eyes/head/gaze): <span id="faceCalmTxt">—</span></div>
+          <div class="meter"><span id="faceCalmBar" style="width:0%"></span></div>
+
+          <div><strong>Breath Consistency</strong> (from mic): <span id="breathConsTxt2">—</span></div>
+          <div class="meter"><span id="breathConsBar2" style="width:0%"></span></div>
+
+            <div><strong>meditation Index:</strong>(from lf/hf) <span id="meditationIndexTxt"></span></div>
+            <div class="meter"><span id="meditationIndexBar" style="width:0%"></span></div>
+          
+          
+
+        <div class="p-4 rounded-2xl bg-black/20 border border-white/10">
+          <div class="text-center text-xl font-bold">Overall Meditation Accuracy</div>
+          <div class="meter h-6 mt-3"><span id="overallBar" style="width:0%"></span></div>
+          <div class="text-center mt-2 text-2xl font-extrabold" id="overallTxt">—</div>
+          <div class="help mt-2" id="overallNote"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session history -->
+    <div class="card mt-6">
+      <h2> Session History</h2>
+      <div class="text-muted">Saved automatic session summaries (local only)</div>
+      <table class="history-table" id="historyTable">
+        <thead>
+          <tr><th>Date</th><th>Face</th><th>Breath</th><th> Feedback</th><th>Overall</th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Large JS: App logic (face tracking, mic, visualizer, analysis, charting, export) -->
+  <script>
+   
+
+  (function(){
+    /* ========================================================================
+       App-scoped Elements & State
+       ======================================================================== */
+    const micSelect = document.getElementById('micSelect');
+    const refreshMicsBtn = document.getElementById('refreshMics');
+    const allowMicBtn = document.getElementById('allowMicBtn');
+    const allowCamBtn = document.getElementById('allowCam');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const breathCountEl = document.getElementById('breathCount');
+    const breathingCircle = document.getElementById('breathingCircle');
+    const breathStatus = document.getElementById('breathStatus');
+    const waveCanvas = document.getElementById('waveCanvas');
+    const waveCtx = waveCanvas.getContext('2d');
+    const feedbackForm = document.getElementById('feedbackForm');
+    const resultChartCtx = document.getElementById('resultChart').getContext('2d');
+    const resultSummary = document.getElementById('resultSummary');
+    const sessionStatus = document.getElementById('sessionStatus');
+
+    const faceCanvas = document.querySelector('.output_canvas');
+    const faceVideo = document.querySelector('.input_video');
+    const faceCtx = faceCanvas.getContext('2d');
+
+    // Score UI nodes
+    const eyeScoreTxt = document.getElementById('eyeScoreTxt');
+    const headScoreTxt = document.getElementById('headScoreTxt');
+    const gazeScoreTxt = document.getElementById('gazeScoreTxt');
+    const eyeBar = document.getElementById('eyeBar');
+    const headBar = document.getElementById('headBar');
+    const gazeBar = document.getElementById('gazeBar');
+
+    const faceCalmTxt = document.getElementById('faceCalmTxt');
+    const faceCalmBar = document.getElementById('faceCalmBar');
+    const breathConsTxt2 = document.getElementById('breathConsTxt2');
+    const breathConsBar2 = document.getElementById('breathConsBar2');
+    const fbAvgTxt = document.getElementById('fbAvgTxt');
+    const fbAvgBar = document.getElementById('fbAvgBar');
+    const overallBar = document.getElementById('overallBar');
+    const overallTxt = document.getElementById('overallTxt');
+    const overallNote = document.getElementById('overallNote');
+    const breathConsTxt = document.getElementById('breathConsTxt');
+    const breathConsBar = document.getElementById('breathConsBar');
+    const micLvl = document.getElementById('micLvl');
+    const micLvlBar = document.getElementById('micLvlBar');
+
+    const fpsNode = document.getElementById('fps');
+    const facesDetectedNode = document.getElementById('facesDetected');
+    const sessionMeter = document.getElementById('sessionMeter');
+
+    const historyBody = document.getElementById('historyBody');
+    const exportCsvBtn = document.getElementById('exportCsv');
+    const clearHistoryBtn = document.getElementById('clearHistory');
+    // ** New elements for heart data **
+    const heartrateTxt = document.getElementById('heartrateTxt');
+    const heartrateBar = document.getElementById('heartrateBar');
+    const sdnnTxt = document.getElementById('sdnnTxt');
+    const sdnnBar = document.getElementById('sdnnBar');
+    const rmssdTxt = document.getElementById('rmssdTxt');
+    const rmssdfBar = document.getElementById('rmssdBar');
+    const meiTxt = document.getElementById('meditationIndexTxt');
+    const meiBar = document.getElementById('meditationIndexBar');
+    const heartcalTxt = document.getElementById('faceCalTxt');
+    const heartCalBar = document.getElementById('faceCalBar');
+
+    // Internal state
+    let selectedMicId = null;
+    let localStream = null;
+    let audioContext = null;
+    let analyser = null;
+    let analyserData = null;
+    let animationId = null;
+    let micAnimation = null;
+
+    let isSessionRunning = false;
+    let cycleTimeout = null;
+    let scriptedGrow = false;
+    let breathingBaseScale = 1.0;
+
+    let ampDerivBuf = [];
+    let noiseBuf = [];
+
+    let faceMeshModel = null;
+    let cameraInstance = null;
+    let faceAnimId = null;
+
+    let lastFeedbackAvg = null;
+    let resultChart = null;
+
+    let sessionHistory = JSON.parse(localStorage.getItem('sns_sessions') || '[]');
+
+    // Smoothing variables
+    let smoothedEAR = 0;
+    let gazeBuf = [];
+    let noseBuf = [];
+    let heartrate =[];
+    let sdnn = [];
+    let rmssd= [];
+    
+
+    // Stats
+    let frames = 0, lastFrameTs = performance.now();
+
+    /* ========================================================================
+       Utilities
+       ======================================================================== */
+    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+    function lerp(a,b,t){ return a + (b-a)*t; }
+    function pct(x){ return Math.round(x*100); }
+    function nowISO(){ return (new Date()).toISOString(); }
+
+    // Format CSV
+    function exportToCsv(filename, rows) {
+      const processRow = function (row) {
+        return row.map(item => {
+          if (typeof item === 'string') {
+            const inner = item.replace(/"/g, '""');
+            return `"${inner}"`;
+          }
+          return item;
+        }).join(',');
+      };
+      const csvFile = rows.map(r => processRow(r)).join('\n');
+      const blob = new Blob([csvFile], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    
+    
+
+    /* ========================================================================
+       Device enumeration & permissions
+       ======================================================================== */
+
+    async function ensurePermissionForMic(){
+      try {
+        const tmp = await navigator.mediaDevices.getUserMedia({ audio:true });
+        tmp.getTracks().forEach(t=>t.stop());
+        return true;
+      } catch(e){
+        console.warn('Mic permission probe failed', e);
+        return false;
+      }
+    }
+
+    function preferredDeviceId(devices){
+      const prefer = /headset|earbud|wired|external|usb|line in|communications|headphone/i;
+      const candidates = devices.filter(d => prefer.test(d.label || ''));
+      if(candidates.length) return candidates[0].deviceId;
+      return devices[0]?.deviceId ?? null;
+    }
+
+    async function loadDevices(){
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        micSelect.innerHTML = '';
+        if(mics.length === 0){
+          const opt = document.createElement('option'); opt.value=''; opt.textContent='No microphone found';
+          micSelect.appendChild(opt); selectedMicId = null; return;
+        }
+        mics.forEach((m,i)=>{
+          const opt = document.createElement('option');
+          opt.value = m.deviceId || '';
+          opt.textContent = m.label || `Microphone ${i+1}`;
+          micSelect.appendChild(opt);
+        });
+        const pick = (selectedMicId && Array.from(micSelect.options).some(o=>o.value===selectedMicId)) ? selectedMicId : preferredDeviceId(mics);
+        selectedMicId = pick || mics[0].deviceId; micSelect.value = selectedMicId;
+      } catch(e){
+        console.error('loadDevices error', e);
+      }
+    }
+
+    micSelect.addEventListener('change', (e)=>{ selectedMicId = e.target.value || null; });
+
+    refreshMicsBtn.addEventListener('click', async ()=>{
+      await ensurePermissionForMic();
+      await loadDevices();
+      alert('Microphones refreshed');
+    });
+
+    allowMicBtn.addEventListener('click', async ()=>{
+      const ok = await ensurePermissionForMic();
+      if(ok){ await loadDevices(); alert('Microphone permission granted.'); } else { alert('Microphone permission denied or unavailable.'); }
+    });
+
+    /* ========================================================================
+       Face model + camera (MediaPipe FaceMesh)
+       ======================================================================== */
+
+    async function startCameraForFace(){
+      try {
+        // Use the Camera helper from MediaPipe
+        faceCanvas.width = faceVideo.clientWidth || 420;
+        faceCanvas.height = faceVideo.clientHeight || 300;
+
+        // Create a new FaceMesh instance
+        faceMeshModel = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+        faceMeshModel.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.6
+        });
+        faceMeshModel.onResults(onFaceResults);
+
+        cameraInstance = new Camera(faceVideo, {
+          onFrame: async () => { await faceMeshModel.send({image: faceVideo}); },
+          width: 640, height: 480
+        });
+        cameraInstance.start();
+        alert('Camera started for facial tracking.');
+      } catch(e){
+        console.error('startCameraForFace error', e);
+        alert('Failed to start camera: ' + (e.message || e));
+      }
+    }
+
+    allowCamBtn.addEventListener('click', async ()=>{
+      try {
+        await startCameraForFace();
+      } catch(e){
+        console.error(e);
+        alert('Camera permission is required.');
+      }
+    });
+    
+    
+
+    /* ========================================================================
+       Face processing helpers (EAR, gaze, head steadiness)
+       ======================================================================== */
+
+    function calcEAR(landmarks, left){
+      // IDs follow MediaPipe face mesh indexing
+      const ids = left ? [33,700,158,260,468,144] : [362,386,387,263,373,380];
+      // defensive checks
+      if(!landmarks) return 0;
+      const p1 = landmarks[ids[1]], p2 = landmarks[ids[2]], p3 = landmarks[ids[4]], p4 = landmarks[ids[5]], p0 = landmarks[ids[0]], p5 = landmarks[ids[3]];
+      if(!p1||!p2||!p3||!p4||!p0||!p5) return 0;
+      const distV1 = Math.hypot(p2.x-p4.x, p2.y-p4.y);
+      const distV2 = Math.hypot(p1.x-p3.x, p1.y-p3.y);
+      const distH = Math.hypot(p0.x-p5.x, p0.y-p5.y) || 1;
+      return (distV1 + distV2) / (2.0 * distH);
+    }
+
+    // Smoothed EAR
+    function getSmoothedEAR(newEAR){
+      smoothedEAR = 0.87* smoothedEAR + 0.13 * newEAR;
+      return smoothedEAR;
+    }
+
+    // Map EAR -> Eye Relaxation %
+    function mapEARtoRelaxScore(ear){
+      // Tunable thresholds; here 0.14 (closed) -> 100%, 0.32 (open) -> 0%
+      const minEAR = 0.15, maxEAR = 0.25;
+      if(ear <= minEAR) return 100;
+      if(ear >= maxEAR) return 0;
+      return ((maxEAR - ear) / (maxEAR - minEAR)) * 100;
+    }
+
+    function onFaceResults(results){
+      frames++;
+      const now = performance.now();
+      const dt = now - lastFrameTs;
+      if(dt >= 1000){
+        fpsNode.textContent = Math.round((frames / (dt/1000))) + ' fps';
+        frames = 0; lastFrameTs = now;
+      }
+
+      faceCtx.save();
+      faceCtx.clearRect(0,0,faceCanvas.width, faceCanvas.height);
+      faceCtx.drawImage(results.image, 0, 0, faceCanvas.width, faceCanvas.height);
+
+      if(!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0){
+        facesDetectedNode.textContent = '0';
+        writeFaceUI(0,0,0);
+        window.__faceCalmness = 0;
+        faceCtx.restore();
+        return;
+      }
+
+      const lm = results.multiFaceLandmarks[0];
+      facesDetectedNode.textContent = '1';
+
+      // draw contours (optional)
+      try {
+        drawConnectors(faceCtx, lm, FACEMESH_TESSELATION, {color:'#ffffff22', lineWidth:1});
+        drawConnectors(faceCtx, lm, FACEMESH_RIGHT_EYE, {color:'#ffffff66'});
+        drawConnectors(faceCtx, lm, FACEMESH_LEFT_EYE, {color:'#ffffff66'});
+      } catch(e){ /* drawing utils may be unavailable in some builds */ }
+
+      // EAR computation and smoothing
+      const leftEAR = calcEAR(lm, true);
+      const rightEAR = calcEAR(lm, false);
+      const avgEAR = (leftEAR + rightEAR) / 2;
+      const smoothEar = getSmoothedEAR(avgEAR);
+      const eyeRelax = mapEARtoRelaxScore(smoothEar) / 100; // 0..1
+
+      // Nose / head steadiness (use landmark index 1 as nose tip)
+      const nose = lm[1];
+      if(nose){ noseBuf.push({x:nose.x, y:nose.y}); if(noseBuf.length>120) noseBuf.shift(); }
+      let headSteady = 0;
+      if(noseBuf.length>6){
+        const xs = noseBuf.map(p=>p.x), ys = noseBuf.map(p=>p.y);
+        const mean = a => a.reduce((s,v)=>s+v,0)/a.length;
+        const mx = mean(xs), my = mean(ys);
+        const varSum = (arr,m)=> arr.reduce((s,v)=>s+(v-m)*(v-m),0)/arr.length;
+        const sdx = Math.sqrt(varSum(xs,mx)), sdy = Math.sqrt(varSum(ys,my));
+        const norm = Math.sqrt(sdx*sdx + sdy*sdy) / Math.max(faceCanvas.width, faceCanvas.height);
+        headSteady = 1 - Math.min(1, norm * 2000);
+        headSteady = clamp01(headSteady);
+      }
+
+      // Gaze stability: measure iris center relative to eye box center
+      // MediaPipe iris landmarks: 468-471 (left?), 473-476 (right?) -> depending on build; use 468 as primary
+      let gaze = 1.0;
+      const lir = lm[468], rir = lm[473];
+      // compute eye-box centers
+      function eyeBox(idxs){
+        const pts = idxs.map(i=>lm[i]).filter(Boolean);
+        if(!pts.length) return null;
+        const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+        return {cx:(Math.min(...xs)+Math.max(...xs))/2, w:(Math.max(...xs) - Math.min(...xs))};
+      }
+      try {
+        const le = [33,160,158,133,153,144].map(i=>lm[i]);
+        const re = [362,385,387,263,373,380].map(i=>lm[i]);
+        const lb = eyeBox([33,160,158,133,153,144]);
+        const rb = eyeBox([362,385,387,263,373,380]);
+        if(lb && rb && lir && rir){
+          const loff = Math.abs(lir.x - lb.cx) / (lb.w || 1);
+          const roff = Math.abs(rir.x - rb.cx) / (rb.w || 1);
+          const off = (loff + roff) / 2;
+          gaze = 1 - Math.min(1, off * 2.2);
+          gazeBuf.push(gaze); if(gazeBuf.length>30) gazeBuf.shift();
+          gaze = gazeBuf.reduce((a,b)=>a+b,0)/gazeBuf.length;
+        }
+      } catch(e){ /* ignore */ }
+
+      // Overall face calmness composite (weights)
+      const faceCalm = clamp01(eyeRelax*0.333333 + headSteady*0.333333 + gaze*0.333333);
+
+      // Draw small indicators
+      try {
+        faceCtx.beginPath();
+        faceCtx.fillStyle = 'rgba(255,255,255,0.7)';
+        faceCtx.arc(nose.x * faceCanvas.width, nose.y * faceCanvas.height, 3, 0, Math.PI*2);
+        faceCtx.fill();
+      } catch(e){}
+
+      // Update UI
+      writeFaceUI(eyeRelax, headSteady, gaze);
+      window.__faceCalmness = faceCalm;
+
+      faceCtx.restore();
+    }
+
+    function writeFaceUI(eyeRelax, headSteady, gaze){
+      const upd = (el,bar,val)=>{ const p = Math.round(val*100); el.textContent = p + '%'; bar.style.width = p + '%'; };
+      upd(eyeScoreTxt, eyeBar, eyeRelax);
+      upd(headScoreTxt, headBar, headSteady);
+      upd(gazeScoreTxt, gazeBar, gaze);
+    }
+
+    /* ========================================================================
+       Audio: start/stop analyser and waveform
+       ======================================================================== */
+
+    async function startAudioForMic(){
+      if(!selectedMicId){
+        alert('Please select a microphone first.');
+        return;
+      }
+      stopAudio(); // cleanup
+
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        await audioContext.resume();
+        const constraints = { audio: { deviceId: selectedMicId && selectedMicId !== 'default' ? { exact: selectedMicId } : undefined, echoCancellation: true, noiseSuppression: true, autoGainControl: false } };
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        const source = audioContext.createMediaStreamSource(localStream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 1;
+        analyserData = new Uint8Array(analyser.frequencyBinCount);
+        source.connect(analyser);
+
+        startVisualizer();
+        return true;
+      } catch(e){
+        console.error('startAudioForMic error', e);
+        alert('Microphone start failed: ' + (e.message||e));
+        return false;
+      }
+    }
+
+    function stopAudio(){
+      if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream = null; }
+      if(audioContext){ try{ audioContext.close(); }catch(e){} audioContext = null; }
+      if(animationId) cancelAnimationFrame(animationId);
+      animationId = null;
+      ampDerivBuf = [];
+      micLvl.textContent = '—';
+      micLvlBar.style.width = '10%';
+    }
+
+    function startVisualizer(){
+      if(!analyser) return;
+      // resize canvas for dpr
+      function resize(){
+        const dpr = window.devicePixelRatio || 4;
+        const w = Math.max(300, waveCanvas.parentElement.clientWidth || 520);
+        const h = 260;
+        waveCanvas.width = Math.floor(w * dpr);
+        waveCanvas.height = Math.floor(h * dpr);
+        waveCanvas.style.width = w + 'px';
+        waveCanvas.style.height = h + 'px';
+        waveCtx.setTransform(dpr,0,0,dpr,0,0);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      let lastAmp = 0;
+      function draw(){
+        animationId = requestAnimationFrame(draw);
+        analyser.getByteTimeDomainData(analyserData);
+        const WIDTH = waveCanvas.width / (window.devicePixelRatio || 1);
+        const HEIGHT = waveCanvas.height / (window.devicePixelRatio || 1);
+        waveCtx.clearRect(0,0,WIDTH,HEIGHT);
+        waveCtx.fillStyle = 'rgba(5,8,20,12)';
+        waveCtx.fillRect(0,0,WIDTH,HEIGHT);
+
+        waveCtx.lineWidth = 2;
+        waveCtx.beginPath();
+        const sliceW = WIDTH / analyserData.length;
+        let x = 0;
+        let sum = 0;
+        for(let i=0;i<analyserData.length;i++){
+          const v = (analyserData[i] / 128.0) - 1.0;
+          const y = (v * 0.95 + 0.5) * HEIGHT;
+          if(i===0) waveCtx.moveTo(x,y); else waveCtx.lineTo(x,y);
+          x += sliceW;
+          sum += Math.abs(v);
+        }
+        waveCtx.strokeStyle = 'rgba(255,165,0,0.95)';
+        waveCtx.stroke();
+
+        const amplitude = Math.min(1, (sum / analyserData.length) * 8);
+        // drive circle: if not scripted, mic amplitude maps scale
+        if(!scriptedGrow){
+          const scale = 0.9 + amplitude * 2.0;
+          breathingCircle.style.transform = `scale(${scale})`;
+        } else {
+          // if scripted, allow small extra
+          const extra = 1 + amplitude * 0.12;
+          const base = breathingBaseScale || 1;
+          breathingCircle.style.transform = `scale(${base * extra})`;
+        }
+
+        // amplitude derivative to measure breath smoothness
+        const deriv = Math.abs(amplitude - lastAmp);
+        lastAmp = amplitude;
+        ampDerivBuf.push(deriv);
+        if(ampDerivBuf.length>1200) ampDerivBuf.shift();
+
+        // mic level UI
+        const micPct = Math.round(amplitude*400);
+        micLvl.textContent = micPct + '%';
+        micLvlBar.style.width = micPct+ '%';
+
+        // breathing consistency quick indicator
+        const consistency = computeBreathConsistency();
+        breathConsTxt.textContent = Math.round(consistency*100) + '%';
+        breathConsBar.style.width = Math.round(consistency*100) + '%';
+
+    
+      }
+      draw();
+    }
+
+    function computeBreathConsistency(){
+      if(!ampDerivBuf.length) return 0.0;
+      const mean = ampDerivBuf.reduce((a,b)=>a+b,0)/ampDerivBuf.length;
+      const smooth = 1 - Math.min(1, mean * 8.0);
+      return clamp01(smooth);
+    }
+
+    /* ========================================================================
+       Session lifecycle: timed breathing + compute final result + chart
+       ======================================================================== */
+
+    function stopSession(){
+      if(!isSessionRunning) return;
+      isSessionRunning = false;
+      sessionStatus.textContent = 'stopped';
+      stopAudio();
+      // stop face camera if needed (we keep camera running because user may want to continue using face tracking)
+      if(cycleTimeout) { clearTimeout(cycleTimeout); cycleTimeout = null; }
+      scriptedGrow = false;
+      breathingBaseScale = .9;
+      breathingCircle.style.transform = 'scale(.6)';
+      breathStatus.textContent = 'Stopped';
+      try{ window.speechSynthesis?.cancel?.(); }catch(e){}
+    }
+
+    async function startSession(){
+      if(isSessionRunning) return;
+      // Try to start audio & camera if not started
+      const micStarted = await startAudioForMic();
+      // Start camera if not active
+      if(!cameraInstance){
+        await startCameraForFace().catch(()=>{/* no-op */});
+      }
+      if(!micStarted){
+        // cannot start session without mic, but still allow face-only sessions
+        if(!confirm('Microphone could not be started. Continue with face-only session?')) return;
+      }
+
+      isSessionRunning = true;
+      sessionStatus.textContent = 'running';
+      ampDerivBuf.length = 0;
+      breathStatus.textContent = 'Session running — follow the breathing prompts';
+      runTimedBreathing();
+      speak('', 'Welcome . Follow the voice .');
+
+    }
+
+    startBtn.addEventListener('click', startSession);
+    stopBtn.addEventListener('click', stopSession);
+
+    let voices = [], chosenVoice = null, muted = false;
+    async function playMeditationTTS(text) {
+    // 1. Fetch TTS audio from API
+    const res = await fetch('/api/tts/indianEnglish', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text})
+    });
+    const ttsBlob = await res.blob();
+
+    // 2. Load background meditation music
+    const music = new Audio('meditation_music.mp3');
+    music.loop = true;
+    music.volume = 0.2;
+    
+
+    // 3. Play both together
+    const ttsAudio = new Audio(URL.createObjectURL(ttsBlob));
+    music.play();
+    ttsAudio.play();
+
+    // 4. When TTS ends, stop music if you want
+    ttsAudio.onended = () => music.pause();
+}
+
+
+async function speakIsha(text) {
+    if(muted) return;
+
+    // 1. Call TTS API (example: fetch from server endpoint returning Isha audio)
+    const response = await fetch('/api/tts/isha', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text})
+    });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+
+    // 2. Play the audio
+    const audio = new Audio(url);
+    audio.play();
+}
+
+function speak(textHi, textEn){
+    if(muted) return;
+
+    const isIshaSelected = chosenVoice?.name?.toLowerCase().includes('isha');
+    if(isIshaSelected){
+        speakIsha(/hi-IN/i.test(chosenVoice.lang) ? textHi : textEn);
+        return;
+    }
+
+    const synth = window.speechSynthesis;
+    if(!synth) return;
+    try{ synth.cancel(); }catch(e){}
+    const u = new SpeechSynthesisUtterance();
+    const hasHi = chosenVoice ? /hi-IN/i.test(chosenVoice.lang) : (voices||[]).some(v => /hi-IN/i.test(v.lang));
+    u.text = hasHi ? textHi : textEn;
+    if(chosenVoice) u.voice = chosenVoice;
+    u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+    synth.speak(u);
+}
+
+
+    // breathing cycle
+    function runTimedBreathing(){
+      const breaths = parseInt(breathCountEl.value, 10) || 3;
+      let count = breaths;
+      const inMs = 6000, holdMs = 5000, outMs = 5000;
+      breathStatus.textContent = `Breaths remaining: ${count}`;
+      let cycleCount = 0;
+      sessionMeter.style.width = '5%';
+      function singleCycle(){
+        if(!isSessionRunning) return;
+        if(count <= 0){ finishBreathing(); return; }
+        // Inhale
+        cycleCount++;
+        const progress = Math.round((cycleCount / breaths) * 100);
+        sessionMeter.style.width = progress + '%';
+        breathStatus.textContent = 'Breathe in';
+        speak('Saas andar lein.', 'Breathe in.');
+        scriptedGrow = true; breathingBaseScale = 2;
+        breathingCircle.style.transition = `transform ${inMs}ms cubic-bezier(.2,.9,.2,1)`;
+        breathingCircle.style.transform = `scale(${breathingBaseScale})`;
+
+        cycleTimeout = setTimeout(()=>{
+          // Hold
+          breathStatus.textContent = 'Hold';
+          speak('Rok kar rakhen.', 'Hold breath.');
+          breathingCircle.style.transition = `transform ${holdMs}ms ease-in-out`;
+          breathingBaseScale = 1.3;
+          breathingCircle.style.transform = `scale(${breathingBaseScale})`;
+
+          cycleTimeout = setTimeout(()=>{
+            breathStatus.textContent = 'Exhale slowly';
+            speak('Dheere se bahar chhodein.', 'Breathe out slowly.');
+            breathingCircle.style.transition = `transform ${outMs}ms cubic-bezier(.2,.9,.2,1)`;
+            breathingBaseScale = 0.7;
+            breathingCircle.style.transform = `scale(${breathingBaseScale})`;
+
+            cycleTimeout = setTimeout(()=>{
+              count -= 1;
+              breathStatus.textContent = `Breaths remaining: ${count}`;
+              cycleTimeout = setTimeout(singleCycle, 2000);
+            }, outMs);
+          }, holdMs);
+        }, inMs);
+      }
+      
+
+      function finishBreathing(){
+        scriptedGrow = false;
+        breathingBaseScale = 1.0;
+        breathingCircle.style.transition = `transform 400ms ease`;
+        breathingCircle.style.transform = 'scale(1)';
+        breathStatus.textContent = 'Session complete. Well done!';
+        speak('Satra samaapt. Bahut badhiya.', 'Session complete. Well done!');
+
+        // compute results and show chart
+        computeFinalResultAndShow();
+      }
+
+      singleCycle();
+    }
+
+    /* ========================================================================
+       Feedback handling + chart rendering
+       ======================================================================== */
+
+    function computeFeedbackAverage(){
+      const fd = new FormData(feedbackForm);
+      const keys = ['q1','q2','q3','q4','q5','q6'];
+      const values = keys.map(k => Number(fd.get(k) || 3));
+      const avg = values.reduce((a,b)=>a+b,0) / 1200;
+      return { avg, values };
+    }
+
+    feedbackForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const {avg, values} = computeFeedbackAverage();
+      lastFeedbackAvg = avg;
+      // build pie chart for feedback
+      if(resultChart) resultChart.destroy();
+      resultChart = new Chart(resultChartCtx, {
+        type: 'pie',
+        data: {
+          labels: ['Mood','Stress','Attention','Connection','Sleep','Thoughts'],
+          datasets: [{ data: values, backgroundColor: ['#6cc',' #8fc',' #a2f',' #f7b',' #ffd',' #c9f'] }]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#dfe6ff' } }
+          }
+        }
+      });
+
+      const avgTxt = avg.toFixed(2);
+      let note = '';
+      if(avg >= 4.2) note = 'Outstanding calm and clarity — keep practicing.';
+      else if(avg >= 3.4) note = 'Good improvement. Regular practice will deepen effects.';
+      else if(avg >= 2.6) note = 'Some benefit noticed — try longer or quieter sessions.';
+      else note = 'Minimal change detected — consider guided sessions or posture checks.';
+      resultSummary.innerHTML = `<strong>Average score:</strong> ${avgTxt}/5<br><strong>Highest:</strong> ${values.indexOf(Math.max(...values))+1}<br>${note}`;
+
+      // Update final card display immediately
+      fbAvgTxt.textContent = `${Math.round((avg/5)*100)}%`;
+      fbAvgBar.style.width = `${Math.round((avg/5)*100)}%`;
+      computeFinalResultAndShow(false); // recompute without forcing chart (chart already there)
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', ()=>{
+      feedbackForm.reset();
+      if(resultChart){ resultChart.destroy(); resultChart = null; }
+      resultSummary.innerHTML = '';
+      lastFeedbackAvg = null;
+      fbAvgTxt.textContent = '—'; fbAvgBar.style.width = '0%';
+      faceCalmTxt.textContent = '—'; faceCalmBar.style.width = '0%';
+      breathConsTxt2.textContent = '—'; breathConsBar2.style.width = '0%';
+      meditationIndex.textContent='-';meditationIndex.style.width='0%';
+      overallTxt.textContent = '—'; overallBar.style.width = '0%'; overallNote.textContent = '';
+      stopSession();
+    });
+
+    /* ========================================================================
+       Final result computation & chart generation
+       ======================================================================== */
+function computeFinalResult(){
+  // --- helpers ---
+  function clamp01(x){ return Math.max(0, Math.min(1, Number(x) || 0)); }
+
+  // --- Face calmness (0..1) ---
+  const f = clamp01(typeof window.__faceCalmness === 'number' ? window.__faceCalmness : 0);
+
+  // --- Breath consistency (0..1) with memory of last non-zero ---
+  let b = 0;
+  try {
+    const cur = Number(computeBreathConsistency?.() ?? 0);
+    if (cur === 0 && (typeof window.lastBreathConsistency !== 'undefined' && window.lastBreathConsistency != null)) {
+      b = window.lastBreathConsistency;
+    } else if (cur > 0) {
+      b = cur;
+      window.lastBreathConsistency = cur; // keep for next time
+    }
+  } catch(e){
+    console.warn('computeBreathConsistency failed:', e);
+    b = (typeof window.lastBreathConsistency === 'number' ? window.lastBreathConsistency : 0);
+  }
+  b = clamp01(b);
+
+  // --- Meditation index (0..1) with memory of last non-zero ---
+  let mei = 0;
+  try {
+    const currentMei = (typeof window.__meditationIndex === 'number' ? window.__meditationIndex :
+                        (typeof window.meditationIndex === 'number' ? window.meditationIndex : 0));
+
+    if (currentMei === 0 && (typeof window.__lastMeditationIndex !== 'undefined' && window.__lastMeditationIndex != null)) {
+      mei = window.__lastMeditationIndex;
+    } else if (currentMei > 0) {
+      mei = currentMei;
+      window.__lastMeditationIndex = currentMei;
+    } else {
+      mei = 0;
+    }
+  } catch(e){
+    console.warn('Reading meditationIndex failed:', e);
+    mei = (typeof window.__lastMeditationIndex === 'number' ? window.__lastMeditationIndex : 0);
+  }
+  mei = clamp01(mei);
+
+  // --- Update UI safely (no feedback anymore) ---
+  try {
+    faceCalmTxt.textContent   = `${Math.round(f*100)}%`;
+    faceCalmBar.style.width   = `${Math.round(f*100)}%`;
+
+    breathConsTxt2.textContent = `${Math.round(b*100)}%`;
+    breathConsBar2.style.width = `${Math.round(b*100)}%`;
+
+    meiTxt.textContent = `${Math.round(mei*100)}%`;
+    meiBar.style.width = `${Math.round(mei*100)}%`;
+  } catch(e){
+    console.warn('UI update failed:', e);
+  }
+
+  // --- Overall score (only face + breath + mei) ---
+  const overallRaw = (f * 0.3) + (b * 0.3) + (mei * 0.4);
+  const overall = clamp01(overallRaw);
+
+  // Debug logs
+  console.log("FaceCalm:", f);
+  console.log("BreathCons:", b, " (lastBreathConsistency:", window.lastBreathConsistency, ")");
+  console.log("MeditationIndex (current global):", typeof window.__meditationIndex === 'number' ? window.__meditationIndex : window.meditationIndex);
+  console.log("MeditationIndex (used/fallback):", mei, "(last stored:", window.__lastMeditationIndex, ")");
+  console.log("Overall (0..1):", overall);
+
+  const pctVal = Math.round(overall*100);
+  try {
+    overallBar.style.width    = pctVal + '%';
+    overallTxt.textContent    = pctVal + '%';
+  } catch(e){
+    console.warn('Overall UI failed:', e);
+  }
+
+  let note = '';
+  if(pctVal >= 85) note = 'Deeply meditative. Excellent stability and relaxation.';
+  else if(pctVal >= 70) note = 'Calm and steady. Keep practicing to reach deeper states.';
+  else if(pctVal >= 55) note = 'Moderate calm. Try slower breaths and soften your gaze.';
+  else note = 'Needs work. Reduce distractions, adjust posture, and try guided audio.';
+  try { overallNote.textContent = note; } catch(e){}
+
+  return {
+    face: Math.round(f*100),
+    breath: Math.round(b*100),
+    mei: Math.round(mei*100),
+    overall: pctVal
+  };
+}
+
+    
+
+  
+
+      
+
+    function computeFinalResultAndShow(forceChart = true){
+      const res = computeFinalResult();
+
+      // Build radar/bar chart summarizing session
+      if(forceChart){
+        if(resultChart) resultChart.destroy();
+        const labels = ['Face Calmness','Breath Consistency','meditation index','Overall'];
+        const data = [res.face, res.breath, res.mei === null ? 0 : res.mei, res.overall];
+        const displayLabels = labels;
+        resultChart = new Chart(resultChartCtx, {
+          type: 'radar',
+          data: {
+            labels: displayLabels,
+            datasets: [{
+              label: 'Session Score',
+              data: data,
+              fill: true,
+              backgroundColor: 'rgba(86,197,195,0.15)',
+              borderColor: '#56c5c3',
+              pointBackgroundColor: '#a2945e',
+              pointBorderColor: '#fff'
+            }]
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: { r: { min:0, max:100, ticks:{ stepSize:5 } } }
+          }
+        });
+      }
+
+      // Save session to local history
+      const now = new Date();
+      const item = {
+        id: (Math.random()*1e9|0),
+        ts: now.toISOString(),
+        face: res.face,
+        breath: res.breath,
+        meditationIndex: res.mei === null ? '-' : res.mei,
+        overall: res.overall
+      };
+      sessionHistory.unshift(item);
+      // cap to last 200
+      if(sessionHistory.length > 200) sessionHistory.length = 200;
+      localStorage.setItem('sns_sessions', JSON.stringify(sessionHistory));
+      renderHistory();
+    }
+
+    function renderHistory(){
+      historyBody.innerHTML = '';
+      sessionHistory.forEach(s=>{
+        const tr = document.createElement('tr');
+        const d = new Date(s.ts);
+        tr.innerHTML = `<td>${d.toLocaleString()}</td><td>${s.face}%</td><td>${s.breath}%</td><td>${s.feedback}%</td><td>${s.overall}%</td>`;
+        historyBody.appendChild(tr);
+      });
+    }
+    renderHistory();
+
+    exportCsvBtn.addEventListener('click', ()=>{
+      if(!sessionHistory.length){ alert('No sessions to export'); return; }
+      const rows = [['timestamp','face','breath','feedback','overall']];
+      sessionHistory.forEach(s => rows.push([s.ts, s.face, s.breath, s.feedback, s.overall]));
+      exportToCsv('sns_sessions.csv', rows);
+    });
+
+    clearHistoryBtn.addEventListener('click', ()=>{
+      if(confirm('Clear all saved sessions?')){
+        sessionHistory = []; localStorage.removeItem('sns_sessions'); renderHistory();
+      }
+    });
+
+    (async ()=>{
+      try { await ensurePermissionForMic(); }catch(e){}
+      await loadDevices();
+      // resize face canvas to match video size on layout
+      setTimeout(()=>{ faceCanvas.width = faceVideo.clientWidth || 420; faceCanvas.height = faceVideo.clientHeight || 300; }, 500);
+    })();
+
+    // refresh devices on devicechange
+    if(navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function'){
+      navigator.mediaDevices.addEventListener('devicechange', ()=>{ loadDevices(); });
+    }
+
+    // allow starting camera quickly (non-blocking)
+    document.getElementById('allowCam').addEventListener('click', async ()=>{
+      try { await startCameraForFace(); } catch(e){ /* error handled inside */ }
+    });
+
+    // simple stop audio & camera on page hide
+    window.addEventListener('beforeunload', ()=>{ stopSession(); try{ cameraInstance?.stop(); }catch(e){} });
+
+    const FACEMESH_TESSELATION = (window && window.FACEMESH_TESSELATION) ? window.FACEMESH_TESSELATION : Array.from({length:0});
+    const FACEMESH_RIGHT_EYE = (window && window.FACEMESH_RIGHT_EYE) ? window.FACEMESH_RIGHT_EYE : [362,385,387,263,373,380];
+    const FACEMESH_LEFT_EYE = (window && window.FACEMESH_LEFT_EYE) ? window.FACEMESH_LEFT_EYE : [33,160,158,133,153,144];
+const glow = document.querySelector(".cursor-glow");
+
+document.addEventListener("mousemove", (e) => {
+  glow.style.left = e.clientX + "px";
+  glow.style.top = e.clientY + "px";
+});
+  })();
+  
+  </script>
+  <script>
+window.addEventListener('scroll', () => {
+  const video = document.querySelector('.video-bg video');
+  const scrollPos = window.scrollY;
+  
+  // Parallax effect
+  const moveY = scrollPos * 0.3; // video thoda upar move
+  // Zoom effect
+  const scale = 1 + scrollPos * 0.0005; 
+  // Opacity effect
+  const opacity = 1 - scrollPos * 0.0008;
+
+  video.style.transform = `translateY(${moveY}px) scale(${scale})`;
+  video.style.opacity = opacity;
+});
+
+   /* WebSocket: Receive live data from Arduino
+   ================================ */
+
+const ws = new WebSocket('ws://10.110.15.75:81');
+ws.onopen = () => console.log("WebSocket connected");
+ws.onclose = () => console.log("WebSocket disconnected");
+ws.onerror = (err) => console.error("WebSocket error", err);
+
+// Persistent storage for meditation index
+let lastMeditationIndex = 0;   // stays across messages
+
+ws.onmessage = (event) => {
+  try {
+    const data = JSON.parse(event.data);
+
+    
+    
+      heartrateTxt.textContent = `${data.BPM.toFixed(0)} bpm`;
+      heartrateBar.style.width = `${Math.min(100, data.BPM)}%`;
+    
+
+    
+    
+      sdnnTxt.textContent = `${(data.sdnn/10).toFixed(3)} ms`;
+      sdnnBar.style.width = `${Math.min(100, data.sdnn * 100)}%`;
+   
+
+   
+    
+      rmssdTxt.textContent = `${(data.rmssd/10).toFixed(2)} ms`;
+      rmssdBar.style.width = `${Math.min(100, data.rmssd)}%`;
+      
+    
+
+    // Meditation Index (only update if valid)
+    if (typeof data.meditationIndex === "number" && !isNaN(data.meditationIndex)) {
+      lastMeditationIndex = data.meditationIndex; // update stored value
+    }
+    // Use stored value to always keep stable display
+    meditationIndexTxt.textContent = `${lastMeditationIndex.toFixed(2)}%`;
+    meditationIndexBar.style.width = `${Math.min(100, lastMeditationIndex)}%`;
+
+  } catch (e) {
+    console.error("Failed to parse WebSocket message:", e);
+  }
+};
+
+// Example WS handler for normalized values (optional)
+ws.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  if (typeof data.meditationIndex === 'number') {
+    const v = data.meditationIndex > 1 ? data.meditationIndex/100 : data.meditationIndex;
+    window.__meditationIndex = Math.max(0, Math.min(1, v));
+    lastMeditationIndex = data.meditationIndex; // persist raw %
+  }
+  if (typeof data.lastFeedbackAvg === 'number') {
+    window.lastFeedbackAvg = data.lastFeedbackAvg; // 0..5
+  }
+};
+</script>
+</body>
+  </html>
